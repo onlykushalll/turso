@@ -89,7 +89,7 @@ pub(crate) fn is_portable_schema_row(row: &PortableSchemaRow) -> bool {
             || row.row_type.eq_ignore_ascii_case("view"))
 }
 
-pub(crate) struct PortableLogicalBuilder<'a> {
+pub struct PortableLogicalBuilder<'a> {
     strings: Vec<&'a str>,
     string_refs: HashMap<&'a str, u64>,
     object_maps: Vec<Vec<u8>>,
@@ -109,7 +109,7 @@ impl Default for PortableLogicalBuilder<'_> {
     }
 }
 
-pub(crate) struct PortableObjectMapEntry<'a> {
+pub struct PortableObjectMapEntry<'a> {
     pub(crate) mv_table_id: i64,
     pub(crate) name: &'a str,
 }

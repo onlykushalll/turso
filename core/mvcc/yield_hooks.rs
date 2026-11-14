@@ -27,7 +27,7 @@ impl YieldPoint {
     }
 }
 
-pub(crate) struct YieldContext {
+pub struct YieldContext {
     pub(crate) injector: Option<Arc<dyn YieldInjector>>,
     pub(crate) failure_injector: Option<Arc<dyn FailureInjector>>,
     pub(crate) instance_id: u64,

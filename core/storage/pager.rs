@@ -81,6 +81,7 @@ impl HeaderRef {
         Ok(IOResult::Done(Self(page)))
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn borrow(&self) -> &DatabaseHeader {
         // TODO: Instead of erasing mutability, implement `get_mut_contents` and return a shared reference.
         let content = self.0.get_contents();
@@ -1607,6 +1608,7 @@ impl SharedPagerState {
 /// The pager interface implements the persistence layer by providing access
 /// to pages of the database file, including caching, concurrency control, and
 /// transaction management.
+#[turso_macros::pub_fields_with_test_helper]
 pub struct Pager {
     /// Source of the database pages.
     pub db_file: Arc<dyn DatabaseStorage>,

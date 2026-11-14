@@ -412,7 +412,7 @@ pub(crate) use static_iterator_hack;
 ///
 /// Owns the [`MvStore::index_rows_epoch`] snapshot used to detect keys created
 /// mid-scan (#7578). A mismatch reseeds from the current B-tree key.
-pub(crate) struct IndexShadowScan<A: ConcurrentAllocator = TursoAllocator> {
+pub struct IndexShadowScan<A: ConcurrentAllocator = TursoAllocator> {
     state: IndexShadowScanState<A>,
     epoch: u64,
 }
@@ -469,7 +469,7 @@ impl<A: ConcurrentAllocator> IndexShadowScan<A> {
     /// Whether the B-tree row `key` is visible (not shadowed by an MVCC version),
     /// served from this co-positioned scan. Forward equivalent of
     /// [`MvStore::query_btree_version_is_valid`] for index keys.
-    pub(crate) fn btree_row_is_valid<Clock: LogicalClock>(
+    pub fn btree_row_is_valid<Clock: LogicalClock>(
         &mut self,
         db: &MvStore<Clock, A>,
         table_id: MVTableId,

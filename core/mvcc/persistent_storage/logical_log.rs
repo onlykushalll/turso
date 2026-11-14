@@ -255,11 +255,12 @@ use crate::File;
 
 mod serializer;
 use serializer::EncryptedPayload;
+pub use serializer::LogSerializer;
 #[cfg(feature = "conn_raw_api")]
 use serializer::{
     extension_record_len, ExtensionRecord, PortableChangePayload, PortableEndOffsetCtx,
 };
-pub(crate) use serializer::{log_write, LogBufferWrite, LogChunkStream, LogSerializer};
+pub(crate) use serializer::{log_write, LogBufferWrite, LogChunkStream};
 #[cfg(feature = "conn_raw_api")]
 pub(crate) use serializer::{
     ProtoKey, ProtoSint64, ProtoVarint, PROTO_WIRE_LENGTH_DELIMITED, PROTO_WIRE_VARINT,
@@ -294,25 +295,25 @@ pub type OnSerializationComplete<'a> =
     Option<&'a dyn Fn(SharedBufferData, LogTxFrameInfo) -> crate::Result<()>>;
 
 const LOG_MAGIC: u32 = 0x4C4D4C32; // "LML2" in LE
-const LOG_VERSION_V2: u8 = 2;
-const LOG_VERSION: u8 = 3;
+pub const LOG_VERSION_V2: u8 = 2;
+pub const LOG_VERSION: u8 = 3;
 pub const LOG_HDR_SIZE: usize = 56;
 const LOG_HDR_SALT_START: usize = 8;
 const LOG_HDR_SALT_SIZE: usize = 8;
-const LOG_HDR_RESERVED_START: usize = LOG_HDR_SALT_START + LOG_HDR_SALT_SIZE; // 16
-const LOG_HDR_CRC_START: usize = 52;
+pub const LOG_HDR_RESERVED_START: usize = LOG_HDR_SALT_START + LOG_HDR_SALT_SIZE; // 16
+pub const LOG_HDR_CRC_START: usize = 52;
 const LOG_HDR_RESERVED_SIZE: usize = LOG_HDR_CRC_START - LOG_HDR_RESERVED_START; // 36
-pub(crate) const FRAME_MAGIC: u32 = 0x5854564D; // "MVTX" in LE
-pub(crate) const EXT_FRAME_MAGIC: u32 = 0x5845564D; // "MVEX" in LE
-const END_MAGIC: u32 = 0x4554564D; // "MVTE" in LE
+pub const FRAME_MAGIC: u32 = 0x5854564D; // "MVTX" in LE
+pub const EXT_FRAME_MAGIC: u32 = 0x5845564D; // "MVEX" in LE
+pub const END_MAGIC: u32 = 0x4554564D; // "MVTE" in LE
 
 // Size of each chunk before encryption (i.e. before tag/nonce overhead is added)
-pub(crate) const ENCRYPTED_PAYLOAD_CHUNK_SIZE: usize = 32 * 1024;
+pub const ENCRYPTED_PAYLOAD_CHUNK_SIZE: usize = 32 * 1024;
 // Fixed AAD width for one encrypted chunk:
 // salt(8) + payload_size_or_zero(8) + op_count(4) + commit_ts(8) + chunk_index(4).
-const ENCRYPTED_CHUNK_AAD_SIZE: usize = 32;
+pub const ENCRYPTED_CHUNK_AAD_SIZE: usize = 32;
 
-const OP_UPSERT_TABLE: u8 = 0;
+pub const OP_UPSERT_TABLE: u8 = 0;
 const OP_DELETE_TABLE: u8 = 1;
 const OP_UPSERT_INDEX: u8 = 2;
 const OP_DELETE_INDEX: u8 = 3;
@@ -340,24 +341,24 @@ impl Default for DeletePortableExtension {
     }
 }
 
-const TX_HEADER_SIZE_V2: usize = 24; // FRAME_MAGIC(4) + payload_size(8) + op_count(4) + commit_ts(8)
-const TX_HEADER_SIZE: usize = TX_HEADER_SIZE_V2;
+pub const TX_HEADER_SIZE_V2: usize = 24; // FRAME_MAGIC(4) + payload_size(8) + op_count(4) + commit_ts(8)
+pub const TX_HEADER_SIZE: usize = TX_HEADER_SIZE_V2;
 // LML3 extension frames keep the recovery fields first, then append portable
 // metadata. Compact frames use the 24-byte recovery header and normal
 // FRAME_MAGIC; extension frames use EXT_FRAME_MAGIC and this 40-byte header.
-pub(crate) const TX_EXT_HEADER_SIZE: usize =
+pub const TX_EXT_HEADER_SIZE: usize =
     TX_HEADER_SIZE + 8 /* extension_size */ + 4 /* extension_record_count */ + 4 /* frame_flags */;
-const TX_TRAILER_SIZE: usize = 8; // crc32c(4) + END_MAGIC(4)
+pub const TX_TRAILER_SIZE: usize = 8; // crc32c(4) + END_MAGIC(4)
 const TX_MIN_FRAME_SIZE_V2: usize = TX_HEADER_SIZE_V2 + TX_TRAILER_SIZE; // 32
 const TX_MIN_FRAME_SIZE: usize = TX_HEADER_SIZE + TX_TRAILER_SIZE; // 32
 const TX_FRAME_FLAG_HAS_EXTENSION_BLOCK: u32 = 1 << 0;
-const EXTENSION_RECORD_HEADER_SIZE: usize = 8; // type(u16) + flags(u16) + len(u32)
-const EXTENSION_TYPE_PORTABLE_CHANGES: u16 = 1;
+pub const EXTENSION_RECORD_HEADER_SIZE: usize = 8; // type(u16) + flags(u16) + len(u32)
+pub const EXTENSION_TYPE_PORTABLE_CHANGES: u16 = 1;
 
 /// Total bytes pre-reserved at the front of a `LogRecord::buf`.
 pub(crate) const LOG_RECORD_PREFIX_SIZE: usize = LOG_HDR_SIZE + TX_HEADER_SIZE;
 
-fn encrypted_payload_chunk_count(payload_size: usize, chunk_size: usize) -> usize {
+pub fn encrypted_payload_chunk_count(payload_size: usize, chunk_size: usize) -> usize {
     if payload_size == 0 {
         0
     } else {
@@ -369,7 +370,7 @@ fn encrypted_payload_chunk_count(payload_size: usize, chunk_size: usize) -> usiz
 /// If the payload fits within a chunk, then that is the length.
 /// If a payload spans over multiple chunks, then except the last chunk rest of the chunks
 /// will have `chunk_size` plaintext and the last one will have the remainder.
-fn encrypted_chunk_plaintext_len(
+pub fn encrypted_chunk_plaintext_len(
     payload_size: usize,
     chunk_index: usize,
     chunk_size: usize,
@@ -388,7 +389,7 @@ fn encrypted_chunk_plaintext_len(
 }
 
 /// On-disk size of one encrypted chunk: `plaintext_len + tag + nonce`.
-fn encrypted_chunk_blob_size(
+pub fn encrypted_chunk_blob_size(
     plaintext_len: usize,
     tag_size: usize,
     nonce_size: usize,
@@ -405,7 +406,7 @@ fn encrypted_chunk_blob_size(
 
 /// Total on-disk size of an encrypted payload: the sum of every chunk's
 /// `plaintext_len + tag + nonce`. The last chunk may be shorter than `chunk_size`.
-fn encrypted_payload_blob_size(
+pub fn encrypted_payload_blob_size(
     payload_size: usize,
     chunk_size: usize,
     tag_size: usize,
@@ -428,7 +429,7 @@ fn encrypted_payload_blob_size(
         .ok_or_else(|| LimboError::Corrupt("encrypted payload total size overflow".to_string()))
 }
 
-fn build_encrypted_chunk_aad(
+pub fn build_encrypted_chunk_aad(
     salt: u64,
     payload_size_in_aad: Option<u64>,
     op_count: u32,
@@ -573,7 +574,7 @@ impl LogHeader {
 
 /// Derives the initial CRC seed from the header salt.
 /// The salt is mixed into a 32-bit CRC state that seeds the first frame's checksum.
-fn derive_initial_crc(salt: u64) -> u32 {
+pub fn derive_initial_crc(salt: u64) -> u32 {
     crc32c::crc32c(&salt.to_le_bytes())
 }
 
@@ -1876,8 +1877,8 @@ impl StreamingLogicalLogReader {
         self.last_valid_offset = LOG_HDR_SIZE;
     }
 
-    #[cfg(test)]
-    pub(crate) fn next_frame_blocking(
+    #[cfg(any(test, feature = "test_helper"))]
+    pub fn next_frame_blocking(
         &mut self,
         io: &Arc<dyn crate::IO>,
     ) -> Result<Option<Vec<ParsedOp>>> {
@@ -3758,7 +3759,7 @@ enum EncryptedChunkReadResult {
 }
 
 #[cfg_attr(test, derive(Debug))]
-enum ParseResult {
+pub enum ParseResult {
     /// A fully validated transaction frame was parsed.
     Frame(ParsedFrame),
     /// True end-of-file: not enough bytes remain to form a complete frame.
@@ -3781,7 +3782,7 @@ pub struct ParsedFrame {
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-pub(crate) enum ParsedOp {
+pub enum ParsedOp {
     UpsertTable {
         table_id: MVTableId,
         rowid: RowID,
@@ -3822,11 +3823,11 @@ pub(crate) enum IndexOpKind {
 
 #[cfg(test)]
 mod tests {
-    use crate::namespace::NamespaceId;
+
     use crate::types::IOResult;
     use crate::util::IOExt as _;
     use std::cell::RefCell;
-    use std::collections::BTreeSet;
+
     use std::sync::Once;
 
     use quickcheck_macros::quickcheck;
@@ -3840,15 +3841,13 @@ mod tests {
     use crate::sync::Arc;
     use crate::{
         mvcc::database::{
-            tests::{commit_tx, generate_simple_string_row, MvccTestDbNoConn},
-            MVTableId, Row, RowID, RowKey, SortableIndexKey,
+            tests::generate_simple_string_row, MVTableId, Row, RowID, RowKey, SortableIndexKey,
         },
-        schema::Table,
         storage::sqlite3_ondisk::{
             read_varint, read_varint_partial, varint_len, write_varint, DatabaseHeader,
         },
-        types::{ImmutableRecord, ImmutableRecordRef, IndexInfo, Text},
-        Buffer, Completion, SharedBufferData, Value, ValueRef,
+        types::{ImmutableRecord, IndexInfo, Text},
+        Buffer, Completion, SharedBufferData, Value,
     };
 
     use super::{
@@ -4364,402 +4363,6 @@ mod tests {
             recovered, expected,
             "encrypted forced-yield recovery must match the synchronous path exactly"
         );
-    }
-
-    /// What this test checks: A committed transaction written to the logical log is replayed correctly after restart.
-    /// Why this matters: This is the baseline durability/recovery guarantee for MVCC commits.
-    #[test]
-    fn test_logical_log_read() {
-        init_tracing();
-        // Load a transaction
-        // let's not drop db as we don't want files to be removed
-        let mut db = MvccTestDbNoConn::new_with_random_db();
-        {
-            let conn = db.connect();
-            let pager = conn.pager.load().clone();
-            let mvcc_store = db.get_mvcc_store();
-            let table_id: MVTableId = (-100).into();
-            let tx_id = mvcc_store.begin_tx(pager).unwrap();
-            // insert table id -2 into sqlite_schema table (table_id -1)
-            let data = ImmutableRecord::from_values(
-                &[
-                    Value::Text(Text::new("table")),  // type
-                    Value::Text(Text::new("test")),   // name
-                    Value::Text(Text::new("test")),   // tbl_name
-                    Value::from_i64(table_id.into()), // rootpage
-                    Value::Text(Text::new(
-                        "CREATE TABLE test(id INTEGER PRIMARY KEY, data TEXT)",
-                    )), // sql
-                ],
-                5,
-            )
-            .unwrap();
-            mvcc_store
-                .insert(
-                    tx_id,
-                    Row::new_table_row(RowID::new((-1).into(), RowKey::Int(1000)), data.as_blob())
-                        .unwrap(),
-                )
-                .unwrap();
-            // now insert a row into table -2
-            let row = generate_simple_string_row(table_id, 1, "foo");
-            mvcc_store.insert(tx_id, row).unwrap();
-            commit_tx(mvcc_store, &conn, tx_id).unwrap();
-        }
-
-        // Restart the database to trigger recovery
-        db.restart();
-
-        // Now try to read it back - recovery happens automatically during bootstrap
-        let conn = db.connect();
-        let pager = conn.pager.load().clone();
-        let mvcc_store = db.get_mvcc_store();
-        let tx = mvcc_store.begin_tx(pager).unwrap();
-        let row = mvcc_store
-            .read(tx, &RowID::new((-100).into(), RowKey::Int(1)))
-            .unwrap()
-            .unwrap();
-        let record = ImmutableRecordRef::from_bin_record(row.payload());
-        let foo = record.iter().unwrap().next().unwrap().unwrap();
-        let ValueRef::Text(foo) = foo else {
-            unreachable!()
-        };
-        assert_eq!(foo.as_str(), "foo");
-    }
-
-    /// What this test checks: A long sequence of committed frames is replayed in order without dropping or reordering transactions.
-    /// Why this matters: Recovery must preserve commit order to maintain MVCC visibility semantics.
-    #[test]
-    fn test_logical_log_read_multiple_transactions() {
-        init_tracing();
-        let table_id: MVTableId = (-100).into();
-        let values = (0..100)
-            .map(|i| {
-                (
-                    RowID::new(table_id, RowKey::Int(i as i64)),
-                    format!("foo_{i}"),
-                )
-            })
-            .collect::<Vec<(RowID, String)>>();
-        // let's not drop db as we don't want files to be removed
-        let mut db = MvccTestDbNoConn::new_with_random_db();
-        {
-            let conn = db.connect();
-            let pager = conn.pager.load().clone();
-            let mvcc_store = db.get_mvcc_store();
-
-            let tx_id = mvcc_store.begin_tx(pager.clone()).unwrap();
-            // insert table id -2 into sqlite_schema table (table_id -1)
-            let data = ImmutableRecord::from_values(
-                &[
-                    Value::Text(Text::new("table")),  // type
-                    Value::Text(Text::new("test")),   // name
-                    Value::Text(Text::new("test")),   // tbl_name
-                    Value::from_i64(table_id.into()), // rootpage
-                    Value::Text(Text::new(
-                        "CREATE TABLE test(id INTEGER PRIMARY KEY, data TEXT)",
-                    )), // sql
-                ],
-                5,
-            )
-            .unwrap();
-            mvcc_store
-                .insert(
-                    tx_id,
-                    Row::new_table_row(RowID::new((-1).into(), RowKey::Int(1000)), data.as_blob())
-                        .unwrap(),
-                )
-                .unwrap();
-            commit_tx(mvcc_store.clone(), &conn, tx_id).unwrap();
-            // now insert a row into table -2
-            // generate insert per transaction
-            for (rowid, value) in &values {
-                let tx_id = mvcc_store.begin_tx(pager.clone()).unwrap();
-                let row = generate_simple_string_row(
-                    rowid.table_id,
-                    rowid.row_id.to_int_or_panic(),
-                    value,
-                );
-                mvcc_store.insert(tx_id, row).unwrap();
-                commit_tx(mvcc_store.clone(), &conn, tx_id).unwrap();
-            }
-        }
-
-        // Restart the database to trigger recovery
-        db.restart();
-
-        // Now try to read it back - recovery happens automatically during bootstrap
-        let conn = db.connect();
-        let pager = conn.pager.load().clone();
-        let mvcc_store = db.get_mvcc_store();
-        for (rowid, value) in &values {
-            let tx = mvcc_store.begin_tx(pager.clone()).unwrap();
-            let row = mvcc_store.read(tx, rowid).unwrap().unwrap();
-            let record = ImmutableRecordRef::from_bin_record(row.payload());
-            let foo = record.iter().unwrap().next().unwrap().unwrap();
-            let ValueRef::Text(foo) = foo else {
-                unreachable!()
-            };
-            assert_eq!(foo.as_str(), value.as_str());
-        }
-    }
-
-    /// What this test checks: Randomized insert/delete workloads round-trip through write + restart replay with matching final contents.
-    /// Why this matters: Fuzz-style coverage catches edge combinations that hand-written examples miss.
-    #[test]
-    fn test_logical_log_read_fuzz() {
-        init_tracing();
-        let table_id: MVTableId = (-100).into();
-        let seed = rng().random();
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let num_transactions = rng.next_u64() % 128;
-        let mut txns = vec![];
-        let mut present_rowids = BTreeSet::new();
-        let mut non_present_rowids = BTreeSet::new();
-        for _ in 0..num_transactions {
-            let num_operations = rng.next_u64() % 8;
-            let mut ops = vec![];
-            for _ in 0..num_operations {
-                let op_type = rng.next_u64() % 2;
-                match op_type {
-                    0 => {
-                        // Generate a positive rowid that fits in i64
-                        let row_id = (rng.next_u64() % (i64::MAX as u64)) as i64;
-                        let rowid = RowID::new(table_id, RowKey::Int(row_id));
-                        let row = generate_simple_string_row(
-                            rowid.table_id,
-                            rowid.row_id.to_int_or_panic(),
-                            &format!("row_{row_id}"),
-                        );
-                        ops.push((true, Some(row), rowid.clone()));
-                        present_rowids.insert(rowid.clone());
-                        non_present_rowids.remove(&rowid);
-                        tracing::debug!("insert {rowid:?}");
-                    }
-                    1 => {
-                        if present_rowids.is_empty() {
-                            continue;
-                        }
-                        let row_id_pos = rng.next_u64() as usize % present_rowids.len();
-                        let row_id = present_rowids.iter().nth(row_id_pos).unwrap().clone();
-                        ops.push((false, None, row_id.clone()));
-                        present_rowids.remove(&row_id);
-                        non_present_rowids.insert(row_id.clone());
-                        tracing::debug!("removed {row_id:?}");
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            txns.push(ops);
-        }
-        // let's not drop db as we don't want files to be removed
-        let mut db = MvccTestDbNoConn::new_with_random_db();
-        let pager = {
-            let conn = db.connect();
-            let pager = conn.pager.load().clone();
-            let mvcc_store = db.get_mvcc_store();
-
-            // insert table id -2 into sqlite_schema table (table_id -1)
-            let tx_id = mvcc_store.begin_tx(pager.clone()).unwrap();
-            let data = ImmutableRecord::from_values(
-                &[
-                    Value::Text(Text::new("table")),  // type
-                    Value::Text(Text::new("test")),   // name
-                    Value::Text(Text::new("test")),   // tbl_name
-                    Value::from_i64(table_id.into()), // rootpage
-                    Value::Text(Text::new(
-                        "CREATE TABLE test(id INTEGER PRIMARY KEY, data TEXT)",
-                    )), // sql
-                ],
-                5,
-            )
-            .unwrap();
-            mvcc_store
-                .insert(
-                    tx_id,
-                    Row::new_table_row(RowID::new((-1).into(), RowKey::Int(1000)), data.as_blob())
-                        .unwrap(),
-                )
-                .unwrap();
-            commit_tx(mvcc_store.clone(), &conn, tx_id).unwrap();
-
-            // insert rows
-            for ops in &txns {
-                let tx_id = mvcc_store.begin_tx(pager.clone()).unwrap();
-                for (is_insert, maybe_row, rowid) in ops {
-                    if *is_insert {
-                        mvcc_store
-                            .insert(tx_id, maybe_row.as_ref().unwrap().clone())
-                            .unwrap();
-                    } else {
-                        mvcc_store.delete(tx_id, rowid.clone()).unwrap();
-                    }
-                }
-                commit_tx(mvcc_store.clone(), &conn, tx_id).unwrap();
-            }
-
-            conn.close().unwrap();
-            pager
-        };
-
-        db.restart();
-
-        // connect after restart should recover log.
-        let _conn = db.connect();
-        let mvcc_store = db.get_mvcc_store();
-
-        // Check rowids that weren't deleted
-        let tx = mvcc_store.begin_tx(pager.clone()).unwrap();
-        for present_rowid in present_rowids {
-            let row = mvcc_store.read(tx, &present_rowid).unwrap().unwrap();
-            let record = ImmutableRecordRef::from_bin_record(row.payload());
-            let foo = record.iter().unwrap().next().unwrap().unwrap();
-            let ValueRef::Text(foo) = foo else {
-                unreachable!()
-            };
-
-            assert_eq!(
-                foo.as_str(),
-                format!("row_{}", present_rowid.row_id.to_int_or_panic())
-            );
-        }
-
-        // Check rowids that were deleted
-        let tx = mvcc_store.begin_tx(pager).unwrap();
-        for present_rowid in non_present_rowids {
-            let row = mvcc_store.read(tx, &present_rowid).unwrap();
-            assert!(
-                row.is_none(),
-                "row {present_rowid:?} should have been removed"
-            );
-        }
-    }
-
-    /// What this test checks: Recovery rebuilds both table rows and index rows from logical-log operations.
-    /// Why this matters: Table/index divergence after restart would break query correctness.
-    #[test]
-    fn test_logical_log_read_table_and_index_rows() {
-        init_tracing();
-        // Test that both table rows and index rows can be read back after recovery
-        let mut db = MvccTestDbNoConn::new_with_random_db();
-        {
-            let conn = db.connect();
-
-            // Create a table with an index
-            conn.execute("CREATE TABLE test(id INTEGER PRIMARY KEY, data TEXT)")
-                .unwrap();
-            conn.execute("CREATE INDEX idx_data ON test(data)").unwrap();
-
-            // Checkpoint to ensure the index has a root_page mapping
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").unwrap();
-
-            // Insert some data - this will create both table rows and index rows in the logical log
-            // Don't checkpoint after inserts so they remain in the logical log for recovery testing
-            conn.execute("INSERT INTO test(id, data) VALUES (1, 'foo')")
-                .unwrap();
-            conn.execute("INSERT INTO test(id, data) VALUES (2, 'bar')")
-                .unwrap();
-            conn.execute("INSERT INTO test(id, data) VALUES (3, 'baz')")
-                .unwrap();
-        }
-
-        // Restart the database to trigger recovery
-        db.restart();
-
-        // Now verify that both table rows and index rows can be read back
-        let conn = db.connect();
-        let pager = conn.pager.load().clone();
-        let mvcc_store = db.get_mvcc_store();
-        let schema = conn.schema.read();
-        let table = schema
-            .get_table(NamespaceId::ROOT, "test")
-            .expect("table test should exist");
-        let Table::BTree(table) = table.as_ref() else {
-            panic!("table test should be btree");
-        };
-        let table_id = mvcc_store.get_table_id_from_root_page(table.root_page);
-
-        // Get the index from schema
-        let index = schema
-            .get_index(NamespaceId::ROOT, "test", "idx_data")
-            .expect("Index should exist");
-        // Use get_table_id_from_root_page to get the correct index_id (handles both checkpointed and non-checkpointed)
-        let index_id = mvcc_store.get_table_id_from_root_page(index.root_page);
-        let index_info = Arc::new(IndexInfo::new_from_index(index).unwrap());
-
-        // Verify table rows can be read
-        let tx = mvcc_store.begin_tx(pager).unwrap();
-        for (row_id, expected_data) in [(1, "foo"), (2, "bar"), (3, "baz")] {
-            let row = mvcc_store
-                .read(tx, &RowID::new(table_id, RowKey::Int(row_id)))
-                .unwrap()
-                .expect("Table row should exist");
-            let record = ImmutableRecordRef::from_bin_record(row.payload());
-            let values = record.get_values().unwrap();
-            let data_value = values.get(1).expect("Should have data column");
-            let ValueRef::Text(data_text) = data_value else {
-                panic!("Data column should be text");
-            };
-            assert_eq!(data_text.as_str(), expected_data);
-        }
-
-        // Verify index rows can be read
-        // Note: Index rows are written to the logical log, but we need to construct the correct key format
-        // The index key format is (indexed_column_value, table_rowid)
-        for (row_id, data_value) in [(1, "foo"), (2, "bar"), (3, "baz")] {
-            // Create the index key: (data_value, rowid)
-            // The index on data column stores (data_value, table_rowid) as the key
-            let key_record = ImmutableRecord::from_values(
-                &[
-                    Value::Text(Text::new(data_value.to_string())),
-                    Value::from_i64(row_id),
-                ],
-                2,
-            )
-            .unwrap();
-            let sortable_key = SortableIndexKey::new_from_payload_in(
-                &key_record,
-                index_info.clone(),
-                crate::alloc::TursoAllocator,
-            )
-            .unwrap();
-            let index_rowid = RowID::new(index_id, RowKey::Record(Arc::new(sortable_key)));
-
-            // Use read_from_table_or_index to read the index row
-            // This verifies that index rows were properly serialized and deserialized from the logical log
-            let index_row_opt = mvcc_store
-                .read_from_table_or_index(tx, &index_rowid, Some(index_id))
-                .unwrap_or_else(|e| {
-                    panic!("Failed to read index row for ({}, {}): {:?}. Index ID: {:?}, root_page: {}",
-                           data_value, row_id, e, index_id, index.root_page)
-                });
-
-            let Some(index_row) = index_row_opt else {
-                panic!(
-                    "Index row for ({data_value}, {row_id}) not found after recovery. Index rows should be in the logical log."
-                );
-            };
-            // Verify the index row contains the correct data
-            let RowKey::Record(sortable_key) = index_row.id.row_id else {
-                panic!("Index row should have a record row_id");
-            };
-            let record = sortable_key.key.clone();
-            let values = record.get_values().unwrap();
-            assert_eq!(
-                values.len(),
-                2,
-                "Index row should have 2 columns (data, rowid)"
-            );
-            let ValueRef::Text(index_data) = values[0] else {
-                panic!("First index column should be text");
-            };
-            assert_eq!(index_data.as_str(), data_value, "Index data should match");
-            let ValueRef::Numeric(crate::numeric::Numeric::Integer(index_rowid_val)) = values[1]
-            else {
-                panic!("Second index column should be integer (rowid)");
-            };
-            assert_eq!(index_rowid_val, row_id, "Index rowid should match");
-        }
     }
 
     /// What this test checks: If the last frame is torn, recovery keeps the valid prefix and ignores only the incomplete tail.

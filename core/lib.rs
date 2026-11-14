@@ -108,7 +108,6 @@ use crate::{
     schema::Trigger,
     storage::encryption::AtomicCipherMode,
     sync::{atomic::AtomicBool, Arc, RwLock},
-    translate::emitter::TransactionMode,
     vdbe::metrics::ConnectionMetrics,
 };
 pub use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -132,6 +131,8 @@ pub use connection::{
 pub(crate) use connection::{AtomicTransactionState, TransactionState};
 pub use connection_hooks::{ConnectionHooks, SavepointMemo};
 pub use database::is_memory_like;
+#[cfg(feature = "test_helper")]
+pub use database::remove_file_from_database_registry;
 #[cfg(feature = "simulator")]
 pub use database::{clear_database_registry, SharedWalTestingSnapshot};
 pub use database::{
@@ -173,6 +174,12 @@ pub use namespace::{NamespaceId, NamespaceRef, Qualifier, Qualifiers};
 pub use numeric::{nonnan::NonNan, Numeric};
 pub use security::roles::SessionRole;
 pub use statement::{ColumnTypeInfo, ColumnTypeKind, Statement, StatementStatusCounter};
+#[cfg(feature = "test_helper")]
+pub use storage::btree::{BTreeCursor, BTreeKey, CursorTrait};
+#[cfg(feature = "test_helper")]
+pub use storage::pager::CreateBTreeFlags;
+#[cfg(feature = "test_helper")]
+pub use storage::wal::TursoRwLock;
 pub use storage::{
     buffer_pool::BufferPool,
     database::{DatabaseStorage, IOContext},
@@ -182,6 +189,7 @@ pub use storage::{
     wal::{CheckpointMode, CheckpointResult, Wal, WalAutoActions, WalFile, WalFileShared},
 };
 pub use translate::collate::CollationSeq;
+pub use translate::emitter::TransactionMode;
 pub use translate::expr::{walk_expr_mut, WalkControl};
 pub use translate::sequence::{emit_sqlite_sequence_row_read, emit_sqlite_sequence_row_write};
 pub use turso_ext::ContextDestructor;
@@ -262,6 +270,6 @@ pub enum TempStore {
     Memory = 2,
 }
 
-pub(crate) type MvStore = mvcc::MvStore<mvcc::MvccClock, alloc::DynAllocator>;
+pub type MvStore = mvcc::MvStore<mvcc::MvccClock, alloc::DynAllocator>;
 
 pub(crate) type MvCursor = mvcc::cursor::MvccLazyCursor<mvcc::MvccClock, alloc::DynAllocator>;

@@ -669,8 +669,9 @@ pub fn clear_database_registry() {
     DATABASE_MANAGER.lock().clear();
 }
 
-#[cfg(test)]
-pub(crate) fn remove_file_from_database_registry(path: &str) {
+/// Makes the next open of `path` create a new `Database`, even while the current one is alive.
+#[cfg(any(test, feature = "test_helper"))]
+pub fn remove_file_from_database_registry(path: &str) {
     let file_id = io::get_file_id(path).unwrap();
     DATABASE_MANAGER.lock().remove(&DatabaseKey::File(file_id));
 }
@@ -680,6 +681,7 @@ pub(crate) fn remove_file_from_database_registry(path: &str) {
 ///
 /// Do that `Database` object is cached and can be long lived. DO NOT store anything sensitive like
 /// encryption key here.
+#[turso_macros::pub_fields_with_test_helper]
 pub struct Database<
     A: alloc::ConcurrentAllocator = alloc::DynAllocator,
     F: alloc::ConcurrentAllocator = alloc::DynAllocator,

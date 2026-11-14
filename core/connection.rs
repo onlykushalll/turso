@@ -466,6 +466,7 @@ impl StorageStatsRead {
 /// If you add a setting that affects SQL compilation or execution, call
 /// `bump_prepare_context_generation()` in its setter so cached prepared
 /// statements know they need to be reprepared.
+#[turso_macros::pub_fields_with_test_helper]
 pub struct Connection {
     pub db: Arc<Database>,
     pub(super) context: Option<Arc<dyn Any + Send + Sync>>,
@@ -1507,7 +1508,7 @@ impl Connection {
     /// Retained for the many synchronous callers (statement reprepare, attach,
     /// extension load, vacuum). The genuinely non-blocking callers (MVCC
     /// bootstrap, the open-db state machine) drive `*_nonblock` directly.
-    pub(crate) fn reparse_schema(self: &Arc<Connection>) -> Result<()> {
+    pub fn reparse_schema(self: &Arc<Connection>) -> Result<()> {
         let io = self.pager.load().io.clone();
         let mut state = ReparseSchemaState::default();
         io.block(|| self.reparse_schema_nonblock(&mut state))
@@ -3457,7 +3458,7 @@ impl Connection {
         self.db.initialized()
     }
 
-    pub(crate) fn get_pager_from_database_index(&self, index: &usize) -> Result<Arc<Pager>> {
+    pub fn get_pager_from_database_index(&self, index: &usize) -> Result<Arc<Pager>> {
         match *index {
             crate::MAIN_DB_ID => Ok(self.pager.load().clone()),
             crate::TEMP_DB_ID => {
@@ -4957,7 +4958,7 @@ impl Connection {
 
     /// Get MVCC transaction ID for a specific database.
     /// Uses fast path for main DB, O(1) HashMap lookup for attached DBs.
-    pub(crate) fn get_mv_tx_id_for_db(&self, db: usize) -> Option<u64> {
+    pub fn get_mv_tx_id_for_db(&self, db: usize) -> Option<u64> {
         if db == crate::MAIN_DB_ID {
             self.get_mv_tx_id()
         } else {
@@ -4969,7 +4970,7 @@ impl Connection {
     }
 
     /// Get MVCC transaction ID and mode for a specific database.
-    pub(crate) fn get_mv_tx_for_db(&self, db: usize) -> Option<(u64, TransactionMode)> {
+    pub fn get_mv_tx_for_db(&self, db: usize) -> Option<(u64, TransactionMode)> {
         if db == crate::MAIN_DB_ID {
             self.get_mv_tx()
         } else {
@@ -5320,7 +5321,7 @@ impl Connection {
 
     /// Get the MvStore for a specific database.
     /// Returns None for databases without MVCC or for bootstrap connections.
-    pub(crate) fn mv_store_for_db(&self, db: usize) -> Option<Arc<MvStore>> {
+    pub fn mv_store_for_db(&self, db: usize) -> Option<Arc<MvStore>> {
         if self.is_mvcc_bootstrap_connection() {
             return None;
         }

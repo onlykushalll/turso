@@ -66,7 +66,7 @@ mod version_chain;
 pub use checkpoint::{sqlite_schema_btree_identity, CheckpointState, CheckpointStateMachine};
 
 mod group_commit;
-pub(crate) use group_commit::{CommitCoordinator, GroupBatch, GroupWork};
+pub use group_commit::{CommitCoordinator, GroupBatch, GroupWork};
 
 #[cfg(feature = "conn_raw_api")]
 use super::persistent_storage::logical_log::{
@@ -83,7 +83,7 @@ use super::portable_logical::{
 };
 
 #[cfg(test)]
-pub mod hermitage_tests;
+mod group_commit_tests;
 #[cfg(test)]
 pub mod tests;
 
@@ -118,7 +118,7 @@ pub(crate) fn first_unsafe_sequence_watermark(seq: &Sequence, value: i64, is_cal
 }
 
 #[cfg(not(any(test, injected_yields)))]
-struct YieldContext;
+pub struct YieldContext;
 
 /// A table ID for MVCC.
 /// MVCC table IDs are always negative. Their corresponding rootpage entry in sqlite_schema
@@ -412,7 +412,7 @@ impl Row {
 /// than a zero sentinel) are required because `Timestamp(0)` is a real value —
 /// the logical clock hands out timestamp 0 to the first transaction.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PackedTs(u64);
+pub struct PackedTs(u64);
 
 impl PackedTs {
     const TIMESTAMP_TAG: u64 = 1 << 62;
@@ -421,7 +421,7 @@ impl PackedTs {
     const NONE: PackedTs = PackedTs(0);
 
     #[inline]
-    pub(crate) fn pack(value: Option<TxTimestampOrID>) -> Self {
+    pub fn pack(value: Option<TxTimestampOrID>) -> Self {
         match value {
             None => Self::NONE,
             Some(TxTimestampOrID::Timestamp(ts)) => {
@@ -455,6 +455,7 @@ impl std::fmt::Debug for PackedTs {
 
 /// A row version.
 #[derive(Clone, Debug, PartialEq)]
+#[turso_macros::pub_fields_with_test_helper]
 pub struct RowVersion {
     /// Unique identifier for this version within the MvStore.
     /// Used for savepoint tracking to identify specific versions to rollback.
@@ -590,8 +591,8 @@ impl LogRecord {
     /// [`DurableStorage::serialize_row_version`] and
     /// [`DurableStorage::serialize_database_header`] instead so the bytes are
     /// appended one op at a time.
-    #[cfg(test)]
-    pub(crate) fn for_test(
+    #[cfg(any(test, feature = "test_helper"))]
+    pub fn for_test(
         tx_timestamp: TxID,
         row_versions: &[(RowID, RowVersion)],
         header: Option<DatabaseHeader>,
@@ -608,7 +609,7 @@ impl LogRecord {
     }
 
     /// Test-only: append one row-version op to the payload buffer.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test_helper"))]
     pub(crate) fn push_row_version_for_test(&mut self, row_id: &RowID, row_version: &RowVersion) {
         crate::mvcc::persistent_storage::logical_log::LogSerializer::new(&mut self.buf)
             .serialize_op_entry(row_id, row_version, None)
@@ -617,7 +618,7 @@ impl LogRecord {
     }
 
     /// Test-only: append a `DatabaseHeader` op to the payload buffer.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test_helper"))]
     pub(crate) fn set_header_for_test(&mut self, header: &DatabaseHeader) {
         assert!(!self.has_header, "header op appended twice in test");
         crate::mvcc::persistent_storage::logical_log::LogSerializer::new(&mut self.buf)
@@ -930,7 +931,7 @@ struct SavepointRollbackResult {
 /// the transaction created or deleted, so a writer adds a chain only when the
 /// chain had no such version before the write. Thus each chain appears once.
 #[derive(Debug)]
-struct WriteSet<A: RowVersionAllocator = TursoAllocator> {
+pub struct WriteSet<A: RowVersionAllocator = TursoAllocator> {
     entries: Vec<(RowID, RowVersions<A>)>,
 }
 
@@ -943,7 +944,7 @@ impl<A: RowVersionAllocator> Default for WriteSet<A> {
 }
 
 impl<A: RowVersionAllocator> WriteSet<A> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -951,7 +952,8 @@ impl<A: RowVersionAllocator> WriteSet<A> {
         self.entries.push((id, row_versions));
     }
 
-    fn len(&self) -> usize {
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
         self.entries.len()
     }
 
@@ -959,7 +961,7 @@ impl<A: RowVersionAllocator> WriteSet<A> {
         self.entries.is_empty()
     }
 
-    fn iter(&self) -> std::slice::Iter<'_, (RowID, RowVersions<A>)> {
+    pub fn iter(&self) -> std::slice::Iter<'_, (RowID, RowVersions<A>)> {
         self.entries.iter()
     }
 
@@ -970,6 +972,7 @@ impl<A: RowVersionAllocator> WriteSet<A> {
 
 /// Transaction
 #[derive(Debug)]
+#[turso_macros::pub_fields_with_test_helper]
 pub struct Transaction<A: RowVersionAllocator = TursoAllocator> {
     /// The state of the transaction.
     state: AtomicTransactionState,
@@ -1321,7 +1324,7 @@ impl<A: RowVersionAllocator> std::fmt::Display for Transaction<A> {
 
 /// Transaction state.
 #[derive(Debug, Clone, PartialEq, Copy)]
-enum TransactionState {
+pub enum TransactionState {
     Active,
     /// Preparing state includes the end_ts so other transactions can compare
     /// timestamps during validation to resolve races (first-committer-wins).
@@ -1373,7 +1376,7 @@ impl TransactionState {
 
 // Transaction state encoded into a single 64-bit atomic.
 #[derive(Debug)]
-pub(crate) struct AtomicTransactionState {
+pub struct AtomicTransactionState {
     pub(crate) state: AtomicU64,
 }
 
@@ -1411,11 +1414,11 @@ impl std::fmt::Display for TransactionState {
 }
 
 impl AtomicTransactionState {
-    fn store(&self, state: TransactionState) {
+    pub fn store(&self, state: TransactionState) {
         self.state.store(state.encode(), Ordering::Release);
     }
 
-    fn load(&self) -> TransactionState {
+    pub fn load(&self) -> TransactionState {
         TransactionState::decode(self.state.load(Ordering::Acquire))
     }
 }
@@ -1536,7 +1539,7 @@ pub struct RewriteLiveVersionsCtx {
 /// How many rowids `BuildLogRecord` / `RewriteLiveVersions` process before
 /// yielding to the executor. Picked to amortize state-machine overhead
 /// while keeping a CREATE INDEX on a 2M-row table responsive.
-const MVCC_COMMIT_BATCH_SIZE: usize = 1024;
+pub const MVCC_COMMIT_BATCH_SIZE: usize = 1024;
 
 #[derive(Debug)]
 pub enum WriteRowState {
@@ -4018,7 +4021,7 @@ pub(crate) const MVCC_META_TABLE_NAME: &str = "__turso_internal_mvcc_meta";
 /// Indicates the maximum transaction timestamp that has been made durable in the WAL.
 /// Used to determine the replay boundary for recovery; only records with a higher timestamp
 /// are replayed.
-pub(crate) const MVCC_META_KEY_PERSISTENT_TX_TS_MAX: &str = "persistent_tx_ts_max";
+pub const MVCC_META_KEY_PERSISTENT_TX_TS_MAX: &str = "persistent_tx_ts_max";
 
 #[derive(Debug)]
 pub struct RowidAllocator {
@@ -4343,9 +4346,9 @@ impl RootEntry {
 
 /// SkipMap / GC counters for debugging (see [`MvStore::debug_gc_snapshot`]).
 /// Test-only harness data, not part of the public MVCC API.
-#[cfg(test)]
+#[cfg(any(test, feature = "test_helper"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct GcDebugSnapshot {
+pub struct GcDebugSnapshot {
     pub rows_slots: usize,
     pub rows_empty_slots: usize,
     pub rows_versions: usize,
@@ -4365,6 +4368,7 @@ pub(crate) struct GcDebugSnapshot {
 
 /// A multi-version concurrency control database.
 #[derive(Debug)]
+#[turso_macros::pub_fields_with_test_helper]
 pub struct MvStore<Clock: LogicalClock, A: ConcurrentAllocator = TursoAllocator> {
     pub rows: SkipMap<RowID, RowVersions<A>, BasicComparator, A>,
     /// Table ID is an opaque identifier that is only meaningful to the MV store.
@@ -4888,7 +4892,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     /// hold it in read mode for their whole lifetime, so acquiring it in write
     /// mode proves there are no active MVCC transactions and prevents new ones
     /// from starting until VACUUM releases it.
-    pub(crate) fn try_begin_vacuum_gate(&self) -> Result<()> {
+    pub fn try_begin_vacuum_gate(&self) -> Result<()> {
         if !self.blocking_checkpoint_lock.write() {
             return Err(LimboError::Busy);
         }
@@ -4900,7 +4904,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     }
 
     /// Release the MVCC stop-the-world gate acquired by `try_begin_vacuum_gate`.
-    pub(crate) fn release_vacuum_gate(&self) {
+    pub fn release_vacuum_gate(&self) {
         self.blocking_checkpoint_lock.unlock();
     }
 
@@ -4921,7 +4925,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     /// The caller must hold the MVCC vacuum gate and pass both the committed
     /// page-1 header and the schema parsed from the post-VACUUM physical
     /// database image.
-    pub(crate) fn reset_after_vacuum(&self, header: DatabaseHeader, schema: &Schema) {
+    pub fn reset_after_vacuum(&self, header: DatabaseHeader, schema: &Schema) {
         turso_assert!(
             self.txs.is_empty(),
             "MVCC VACUUM reset requires no active transactions"
@@ -6675,7 +6679,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     /// This function starts a new transaction in the database and returns a `TxID` value
     /// that you can use to perform operations within the transaction. All changes made within the
     /// transaction are isolated from other transactions until you commit the transaction.
-    #[cfg(any(test, feature = "bench"))]
+    #[cfg(any(test, feature = "test_helper", feature = "bench"))]
     pub fn begin_tx(&self, pager: Arc<Pager>) -> Result<TxID> {
         self.begin_tx_with_schema_generation(pager, None)
     }
@@ -6684,7 +6688,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     /// `Connection::mvcc_begin_schema_generation`). Used by the statement begin path so a passive
     /// checkpoint that republishes physical roots into the begin window forces a reprepare instead
     /// of a transaction beginning against stale roots.
-    #[cfg(any(test, feature = "bench"))]
+    #[cfg(any(test, feature = "test_helper", feature = "bench"))]
     pub fn begin_tx_with_schema_generation(
         &self,
         pager: Arc<Pager>,
@@ -6866,7 +6870,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     }
 
     #[turso_macros::allocation_site(crate::alloc::MvStoreAllocationSite::FinalizedTxStateInsert)]
-    fn insert_finalized_tx_state(
+    pub fn insert_finalized_tx_state(
         &self,
         tx_id: TxID,
         commit_ts: u64,
@@ -7708,7 +7712,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     }
 
     /// Acquires the exclusive transaction lock to the given transaction ID.
-    fn acquire_exclusive_tx(
+    pub fn acquire_exclusive_tx(
         &self,
         tx_id: &TxID,
         yield_context: Option<&YieldContext>,
@@ -7797,7 +7801,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     }
 
     /// Release the exclusive transaction lock if held by the this transaction.
-    fn release_exclusive_tx(&self, tx_id: &TxID) {
+    pub fn release_exclusive_tx(&self, tx_id: &TxID) {
         tracing::trace!("release_exclusive_tx(tx_id={})", tx_id);
         let prev = self.exclusive_tx.swap(NO_EXCLUSIVE_TX, Ordering::Release);
         turso_assert_eq!(prev, *tx_id, "exclusive lock released by wrong tx", { "expected_tx_id": *tx_id, "actual_tx_id": prev });
@@ -7856,7 +7860,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
         snapshot_ts
     }
 
-    pub(crate) fn mark_checkpoint_dirty_key(
+    pub fn mark_checkpoint_dirty_key(
         &self,
         key: &RowID,
         stamp: u64,
@@ -7965,7 +7969,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
             .store(false, Ordering::Release);
     }
 
-    pub(crate) fn schema_generation(&self) -> u64 {
+    pub fn schema_generation(&self) -> u64 {
         self.schema_generation.load(Ordering::Acquire)
     }
 
@@ -8023,8 +8027,8 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     }
 
     /// Debug SkipMap / GC counters. Walks every chain; not for hot paths.
-    #[cfg(test)]
-    pub(crate) fn debug_gc_snapshot(&self) -> GcDebugSnapshot {
+    #[cfg(any(test, feature = "test_helper"))]
+    pub fn debug_gc_snapshot(&self) -> GcDebugSnapshot {
         let mut rows_empty_slots = 0;
         let mut rows_versions = 0;
         for entry in self.rows.iter() {
@@ -8110,7 +8114,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
         self.commit_coordinator.group_commit_enabled()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test_helper"))]
     pub fn last_group_commit_size(&self) -> usize {
         self.commit_coordinator.last_group_size()
     }
@@ -8134,7 +8138,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     /// here cannot miss a transaction mid-publish. Call this *before* taking
     /// any version-chain write lock. Taking the clock while holding a chain
     /// lock deadlocks against Passive publish (`clock` then `versions.write()`).
-    pub(crate) fn sample_gc_lwm(&self) -> u64 {
+    pub fn sample_gc_lwm(&self) -> u64 {
         let mut lwm = u64::MAX;
         self.clock.get_timestamp(|_| {
             lwm = self.compute_lwm();
@@ -8149,7 +8153,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     /// without holding that lock. An `lwm` of `u64::MAX` is checked again
     /// against the open transactions, because a reader may have begun after
     /// the sample.
-    pub(crate) fn gc_chain_now(
+    pub fn gc_chain_now(
         &self,
         versions: &mut RowVersionChain<A>,
         lwm: u64,
@@ -8841,7 +8845,7 @@ impl<Clock: LogicalClock, A: ConcurrentAllocator> MvStore<Clock, A> {
     }
 
     #[turso_macros::allocation_site(crate::alloc::MvStoreAllocationSite::IndexRowsEntry)]
-    pub(crate) fn get_or_create_index_rows(
+    pub fn get_or_create_index_rows(
         &self,
         index_id: MVTableId,
     ) -> Result<IndexRowsEntry<'_, A>, TryReserveError> {
@@ -10962,12 +10966,12 @@ impl RowVersion {
     /// WAL position at which this version's current state is materialized in the B-tree
     /// ([`WalPos::ORIGIN`] = not materialized). See the field doc.
     #[inline]
-    pub(crate) fn materialized_at(&self) -> WalPos {
+    pub fn materialized_at(&self) -> WalPos {
         self.materialized_at
     }
 
     #[inline]
-    pub(crate) fn set_materialized_at(&mut self, pos: WalPos) {
+    pub fn set_materialized_at(&mut self, pos: WalPos) {
         self.materialized_at = pos;
     }
 
@@ -11192,7 +11196,7 @@ fn lookup_tx_state<A: ConcurrentAllocator>(
         .or_else(|| finalized_tx_states.get(&tx_id).map(|entry| *entry.value()))
 }
 
-fn lookup_finalized_tx_state<A: ConcurrentAllocator>(
+pub fn lookup_finalized_tx_state<A: ConcurrentAllocator>(
     finalized_tx_states: &SkipMap<TxID, TransactionState, BasicComparator, A>,
     tx_id: TxID,
 ) -> Option<TransactionState> {

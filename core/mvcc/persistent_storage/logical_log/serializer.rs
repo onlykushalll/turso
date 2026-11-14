@@ -6,7 +6,7 @@ use super::*;
 /// serializer reserve for the complete stream once, then bulk-copy each slice.
 /// Flattening the same chain to `Iterator<Item = u8>` loses those slice
 /// boundaries and makes `Vec::extend` copy the payload one byte at a time.
-pub(crate) trait LogChunkStream: Sized {
+pub trait LogChunkStream: Sized {
     fn encoded_len(&self) -> Option<usize>;
 
     fn copy_to(self, writer: &mut LogChunkWriter) -> Result<()>;
@@ -17,7 +17,7 @@ pub(crate) trait LogChunkStream: Sized {
     }
 }
 
-pub(crate) struct ChainedLogChunks<L, R> {
+pub struct ChainedLogChunks<L, R> {
     left: L,
     right: R,
 }
@@ -84,11 +84,11 @@ impl LogChunkStream for BorrowedLogChunk<'_> {
     }
 }
 
-pub(crate) trait LogBufferWrite {
+pub trait LogBufferWrite {
     fn into_chunks(self) -> impl LogChunkStream;
 }
 
-pub(crate) struct LogChunkWriter {
+pub struct LogChunkWriter {
     output: *mut u8,
     capacity: usize,
     written: usize,
@@ -116,7 +116,7 @@ impl LogChunkWriter {
     }
 }
 
-pub(crate) trait LogBufferExt: std::ops::DerefMut<Target = [u8]> {
+pub trait LogBufferExt: std::ops::DerefMut<Target = [u8]> {
     fn try_extend_chunks(&mut self, chunks: impl LogChunkStream) -> Result<()>;
     fn try_resize_zeroed(&mut self, new_len: usize) -> Result<()>;
 }
@@ -205,7 +205,7 @@ macro_rules! log_write {
 }
 pub(crate) use log_write;
 
-pub(crate) struct LogSerializer<'a, B: ?Sized = Vec<u8>> {
+pub struct LogSerializer<'a, B: ?Sized = Vec<u8>> {
     buffer: &'a mut B,
 }
 

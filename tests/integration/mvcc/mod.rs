@@ -1,4 +1,11 @@
 mod checkpoint;
+mod checkpoint_dirty_keys;
+mod database;
+mod group_commit;
+mod group_commit_sync_mode;
+mod hermitage;
+mod logical_log;
+mod store;
 mod test_db;
 
 use crate::common::{ExecRows, TempDatabase};
