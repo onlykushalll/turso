@@ -1710,3 +1710,22 @@ fn get_caller_file(input: &TokenStream) -> String {
 fn prefix_message(file_path: &str, msg: &LitStr) -> LitStr {
     LitStr::new(&format!("[{}] {}", file_path, msg.value()), msg.span())
 }
+
+/// Makes every field of a struct public when the crate that defines it is
+/// built with its `test_helper` feature. Without the feature the struct is
+/// unchanged.
+#[proc_macro_attribute]
+pub fn pub_fields_with_test_helper(_attr: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as syn::ItemStruct);
+    let mut public = item.clone();
+    for field in public.fields.iter_mut() {
+        field.vis = syn::parse_quote!(pub);
+    }
+    quote! {
+        #[cfg(not(feature = "test_helper"))]
+        #item
+        #[cfg(feature = "test_helper")]
+        #public
+    }
+    .into()
+}
